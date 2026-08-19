@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bursa Lens — Admin Lisensi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg: #0B1220;
+    --surface: #111A2E;
+    --surface-2: #16213A;
+    --border: #223050;
+    --text: #E7ECF5;
+    --text-dim: #8894AC;
+    --text-faint: #5A6684;
+    --accent: #2DD4BF;
+    --accent-dim: #1B7F73;
+    --danger: #F0555A;
+    --danger-dim: #6B2A2C;
+    --warn: #E8B84B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(45,212,191,0.07), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+  }
+  ::selection{ background:var(--accent-dim); color:#fff; }
+
+  /* ---- Login ---- */
+  #loginScreen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .login-card{
+    width:100%;
+    max-width:380px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:36px 32px 32px;
+    position:relative;
+    overflow:hidden;
+  }
+  .login-card::before{
+    content:'';
+    position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .brand-mark{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.16em;
+    color:var(--accent);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .login-card h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:22px;
+    margin:0 0 26px;
+    font-weight:600;
+    color:var(--text);
+  }
+  .field{ margin-bottom:16px; }
+  .field label{
+    display:block;
+    font-size:12px;
+    color:var(--text-dim);
+    margin-bottom:6px;
+    font-weight:500;
+  }
+  .field input{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:11px 12px;
+    color:var(--text);
+    font-size:14px;
+    font-family:'Inter',sans-serif;
+    outline:none;
+    transition:border-color .15s;
+  }
+  .field input:focus{ border-color:var(--accent); }
+  .btn{
+    appearance:none;
+    border:none;
+    border-radius:8px;
+    padding:11px 18px;
+    font-size:14px;
+    font-weight:600;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+    transition:transform .1s, opacity .15s, background .15s;
+  }
+  .btn:active{ transform:scale(0.98); }
+  .btn-primary{
+    background:var(--accent);
+    color:#052321;
+    width:100%;
+    margin-top:6px;
+  }
+  .btn-primary:hover{ background:#3EE5CE; }
+  .btn-primary:disabled{ opacity:.5; cursor:default; }
+  .login-error{
+    color:var(--danger);
+    font-size:13px;
+    margin-top:14px;
+    display:none;
+  }
+
+  /* ---- App shell ---- */
+  #appScreen{ display:none; }
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:18px 28px;
+    border-bottom:1px solid var(--border);
+    background:rgba(17,26,46,0.7);
+    backdrop-filter:blur(6px);
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  .topbar-left{ display:flex; align-items:baseline; gap:12px; }
+  .topbar h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:17px;
+    margin:0;
+    font-weight:600;
+  }
+  .topbar .accent{ color:var(--accent); }
+  .topbar-sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--text-faint);
+  }
+  .btn-ghost{
+    background:transparent;
+    border:1px solid var(--border);
+    color:var(--text-dim);
+    font-size:13px;
+    padding:8px 14px;
+  }
+  .btn-ghost:hover{ border-color:var(--text-dim); color:var(--text); }
+
+  .container{ max-width:1180px; margin:0 auto; padding:28px; }
+
+  .stats-row{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:14px;
+    margin-bottom:26px;
+  }
+  .stat-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px 18px;
+  }
+  .stat-card .label{
+    font-size:11px;
+    color:var(--text-faint);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin-bottom:8px;
+  }
+  .stat-card .value{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:26px;
+    font-weight:700;
+  }
+  .stat-card.aktif .value{ color:var(--accent); }
+  .stat-card.dicabut .value{ color:var(--danger); }
+
+  .toolbar{
+    display:flex;
+    gap:10px;
+    margin-bottom:16px;
+    align-items:center;
+  }
+  .search-box{
+    flex:1;
+    position:relative;
+  }
+  .search-box input{
+    width:100%;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 14px 10px 36px;
+    color:var(--text);
+    font-size:13px;
+    font-family:'IBM Plex Mono',monospace;
+    outline:none;
+  }
+  .search-box input:focus{ border-color:var(--accent); }
+  .search-box svg{
+    position:absolute; left:11px; top:50%; transform:translateY(-50%);
+    opacity:.4;
+  }
+  select#filterStatus{
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:13px;
+    font-family:'Inter',sans-serif;
+    outline:none;
+    cursor:pointer;
+  }
+
+  .table-wrap{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  table{ width:100%; border-collapse:collapse; }
+  thead th{
+    text-align:left;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--text-faint);
+    font-weight:600;
+    padding:14px 16px;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:13px 16px;
+    border-bottom:1px solid var(--border);
+    font-size:13px;
+    vertical-align:middle;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr{ transition:background .1s; }
+  tbody tr:hover{ background:rgba(255,255,255,0.02); }
+  .mono{ font-family:'IBM Plex Mono',monospace; font-size:12px; }
+  .machine-id{
+    color:var(--text);
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+  .machine-id:hover{ color:var(--accent); }
+  .copy-hint{ opacity:0; transition:opacity .1s; font-size:10px; color:var(--accent); }
+  .machine-id:hover .copy-hint{ opacity:1; }
+  .dim{ color:var(--text-dim); }
+  .faint{ color:var(--text-faint); }
+
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    padding:4px 9px;
+    border-radius:20px;
+    font-size:11px;
+    font-weight:600;
+    font-family:'Inter',sans-serif;
+  }
+  .badge::before{ content:''; width:6px; height:6px; border-radius:50%; }
+  .badge.aktif{ background:rgba(45,212,191,0.12); color:var(--accent); }
+  .badge.aktif::before{ background:var(--accent); }
+  .badge.dicabut{ background:rgba(240,85,90,0.12); color:var(--danger); }
+  .badge.dicabut::before{ background:var(--danger); }
+
+  .action-btn{
+    font-size:12px;
+    font-weight:600;
+    padding:6px 12px;
+    border-radius:6px;
+    border:1px solid var(--border);
+    background:transparent;
+    cursor:pointer;
+    font-family:'Inter',sans-serif;
+    transition:all .12s;
+  }
+  .action-btn.revoke{ color:var(--danger); }
+  .action-btn.revoke:hover{ background:var(--danger); color:#fff; border-color:var(--danger); }
+  .action-btn.restore{ color:var(--accent); }
+  .action-btn.restore:hover{ background:var(--accent); color:#052321; border-color:var(--accent); }
+  .action-btn:disabled{ opacity:.4; cursor:default; }
+
+  .empty-state{
+    text-align:center;
+    padding:60px 20px;
+    color:var(--text-faint);
+  }
+  .empty-state .icon{ font-size:28px; margin-bottom:10px; opacity:.5; }
+
+  .toast{
+    position:fixed;
+    bottom:24px;
+    left:50%;
+    transform:translateX(-50%) translateY(12px);
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:11px 18px;
+    border-radius:8px;
+    font-size:13px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .2s, transform .2s;
+    z-index:100;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.err{ border-color:var(--danger); color:var(--danger); }
+
+  .loading-row td{ text-align:center; padding:40px; color:var(--text-faint); font-family:'IBM Plex Mono',monospace; font-size:12px; }
+
+  @media (max-width:720px){
+    .stats-row{ grid-template-columns:repeat(2,1fr); }
+    .container{ padding:18px 14px; }
+    thead{ display:none; }
+    table, tbody, tr, td{ display:block; width:100%; }
+    tbody tr{ border-bottom:1px solid var(--border); padding:12px 0; }
+    tbody td{ border:none; padding:4px 0; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ============== LOGIN ============== -->
+  <div id="loginScreen">
+    <div class="login-card">
+      <div class="brand-mark">Bursa Lens</div>
+      <h1>Masuk sebagai Admin</h1>
+      <div class="field">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" autocomplete="username" placeholder="admin@email.com">
+      </div>
+      <div class="field">
+        <label for="loginPassword">Kata sandi</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary" id="btnLogin">Masuk</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
+  </div>
+
+  <!-- ============== APP ============== -->
+  <div id="appScreen">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1>Bursa Lens <span class="accent">— Admin Lisensi</span></h1>
+        <span class="topbar-sub" id="userEmail"></span>
+      </div>
+      <button class="btn btn-ghost" id="btnLogout">Keluar</button>
+    </div>
+
+    <div class="container">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="label">Total Lisensi</div>
+          <div class="value" id="statTotal">–</div>
+        </div>
+        <div class="stat-card aktif">
+          <div class="label">Aktif</div>
+          <div class="value" id="statAktif">–</div>
+        </div>
+        <div class="stat-card dicabut">
+          <div class="label">Dicabut</div>
+          <div class="value" id="statDicabut">–</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Aktivasi 7 Hari Ini</div>
+          <div class="value" id="statBaru">–</div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" id="searchInput" placeholder="Cari Machine ID atau kode lisensi...">
+        </div>
+        <select id="filterStatus">
+          <option value="all">Semua status</option>
+          <option value="aktif">Aktif</option>
+          <option value="dicabut">Dicabut</option>
+        </select>
+        <button class="btn btn-ghost" id="btnRefresh">↻ Muat ulang</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Machine ID</th>
+              <th>Kode Lisensi</th>
+              <th>Expiry</th>
+              <th>Aktivasi Pertama</th>
+              <th>Terakhir Terlihat</th>
+              <th>Status</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+            <tr class="loading-row"><td colspan="7">Memuat data…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+  // ======================================================================
+  // KONFIGURASI — isi dengan Project URL & anon public key dari Supabase-mu
+  // (Settings → API di dashboard Supabase). Keduanya AMAN dipakai di sisi
+  // client, karena akses sesungguhnya dibatasi oleh RLS policy di database.
+  // ======================================================================
+  const SUPABASE_URL = "GANTI_DENGAN_PROJECT_URL_SUPABASE";
+  const SUPABASE_ANON_KEY = "GANTI_DENGAN_ANON_PUBLIC_KEY_SUPABASE";
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const loginScreen = document.getElementById('loginScreen');
+  const appScreen = document.getElementById('appScreen');
+  const loginError = document.getElementById('loginError');
+  const userEmailEl = document.getElementById('userEmail');
+  const tableBody = document.getElementById('tableBody');
+  const toastEl = document.getElementById('toast');
+
+  let allLicenses = [];
+
+  function showToast(msg, isErr=false){
+    toastEl.textContent = msg;
+    toastEl.className = 'toast show' + (isErr ? ' err' : '');
+    setTimeout(()=> toastEl.className = 'toast', 2400);
+  }
+
+  function fmtDate(iso){
+    if(!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'numeric'}) +
+           ' ' + d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  function truncateMid(str, front=8, back=6){
+    if(!str) return '—';
+    if(str.length <= front + back + 3) return str;
+    return str.slice(0,front) + '…' + str.slice(-back);
+  }
+
+  async function copyToClipboard(text){
+    try{
+      await navigator.clipboard.writeText(text);
+      showToast('Disalin: ' + truncateMid(text, 10, 8));
+    }catch(e){
+      showToast('Gagal menyalin', true);
+    }
+  }
+
+  // ---------------- AUTH ----------------
+  document.getElementById('btnLogin').addEventListener('click', doLogin);
+  document.getElementById('loginPassword').addEventListener('keydown', e=>{
+    if(e.key === 'Enter') doLogin();
+  });
+
+  async function doLogin(){
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const btn = document.getElementById('btnLogin');
+    loginError.style.display = 'none';
+    if(!email || !password){
+      loginError.textContent = 'Isi email dan kata sandi.';
+      loginError.style.display = 'block';
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Memeriksa…';
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    btn.disabled = false; btn.textContent = 'Masuk';
+    if(error){
+      loginError.textContent = 'Login gagal: ' + error.message;
+      loginError.style.display = 'block';
+      return;
+    }
+    enterApp(data.user);
+  }
+
+  document.getElementById('btnLogout').addEventListener('click', async ()=>{
+    await sb.auth.signOut();
+    location.reload();
+  });
+
+  function enterApp(user){
+    loginScreen.style.display = 'none';
+    appScreen.style.display = 'block';
+    userEmailEl.textContent = user.email;
+    loadLicenses();
+  }
+
+  // Cek sesi yang sudah tersimpan (biar tidak perlu login ulang tiap buka)
+  (async ()=>{
+    const { data: { session } } = await sb.auth.getSession();
+    if(session && session.user){
+      enterApp(session.user);
+    }
+  })();
+
+  // ---------------- DATA ----------------
+  document.getElementById('btnRefresh').addEventListener('click', loadLicenses);
+  document.getElementById('searchInput').addEventListener('input', renderTable);
+  document.getElementById('filterStatus').addEventListener('change', renderTable);
+
+  async function loadLicenses(){
+    tableBody.innerHTML = '<tr class="loading-row"><td colspan="7">Memuat data…</td></tr>';
+    const { data, error } = await sb
+      .from('licenses')
+      .select('*')
+      .order('last_seen_at', { ascending:false });
+
+    if(error){
+      tableBody.innerHTML = `<tr class="loading-row"><td colspan="7">Gagal memuat: ${error.message}</td></tr>`;
+      return;
+    }
+    allLicenses = data || [];
+    updateStats();
+    renderTable();
+  }
+
+  function updateStats(){
+    const total = allLicenses.length;
+    const dicabut = allLicenses.filter(l=>l.revoked).length;
+    const aktif = total - dicabut;
+    const sevenDaysAgo = Date.now() - 7*24*60*60*1000;
+    const baru = allLicenses.filter(l=> new Date(l.first_activated_at).getTime() >= sevenDaysAgo).length;
+
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statAktif').textContent = aktif;
+    document.getElementById('statDicabut').textContent = dicabut;
+    document.getElementById('statBaru').textContent = baru;
+  }
+
+  function renderTable(){
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    const statusFilter = document.getElementById('filterStatus').value;
+
+    let rows = allLicenses.filter(l=>{
+      const matchQ = !q || (l.machine_id||'').toLowerCase().includes(q) || (l.license_key||'').toLowerCase().includes(q);
+      const matchStatus = statusFilter === 'all' ||
+        (statusFilter === 'aktif' && !l.revoked) ||
+        (statusFilter === 'dicabut' && l.revoked);
+      return matchQ && matchStatus;
+    });
+
+    if(rows.length === 0){
+      tableBody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">◇</div>Tidak ada lisensi yang cocok.</div></td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = rows.map(l=>{
+      const statusBadge = l.revoked
+        ? `<span class="badge dicabut">Dicabut</span>`
+        : `<span class="badge aktif">Aktif</span>`;
+      const actionBtn = l.revoked
+        ? `<button class="action-btn restore" data-id="${l.machine_id}" data-action="restore">Aktifkan</button>`
+        : `<button class="action-btn revoke" data-id="${l.machine_id}" data-action="revoke">Cabut</button>`;
+      return `
+        <tr>
+          <td>
+            <span class="machine-id mono" onclick="copyToClipboard('${l.machine_id}')">
+              ${truncateMid(l.machine_id)}
+              <span class="copy-hint">salin</span>
+            </span>
+          </td>
+          <td class="mono dim">${truncateMid(l.license_key || '—', 10, 6)}</td>
+          <td class="dim">${l.expiry === 'PERPETUAL' ? 'Permanen' : (l.expiry || '—')}</td>
+          <td class="faint">${fmtDate(l.first_activated_at)}</td>
+          <td class="faint">${fmtDate(l.last_seen_at)}</td>
+          <td>${statusBadge}</td>
+          <td>${actionBtn}</td>
+        </tr>`;
+    }).join('');
+
+    document.querySelectorAll('.action-btn').forEach(btn=>{
+      btn.addEventListener('click', onToggleRevoke);
+    });
+  }
+
+  async function onToggleRevoke(e){
+    const btn = e.currentTarget;
+    const machineId = btn.dataset.id;
+    const action = btn.dataset.action;
+    const revoke = action === 'revoke';
+
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    const { error } = await sb
+      .from('licenses')
+      .update({
+        revoked: revoke,
+        revoked_at: revoke ? new Date().toISOString() : null
+      })
+      .eq('machine_id', machineId);
+
+    if(error){
+      showToast('Gagal: ' + error.message, true);
+      btn.disabled = false;
+      btn.textContent = revoke ? 'Cabut' : 'Aktifkan';
+      return;
+    }
+
+    showToast(revoke ? 'Lisensi dicabut.' : 'Lisensi diaktifkan kembali.');
+    await loadLicenses();
+  }
+</script>
+</body>
+</html>
