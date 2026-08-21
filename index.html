@@ -34,7 +34,6 @@
   }
   ::selection{ background:var(--accent-dim); color:#fff; }
 
-  /* ---- Login ---- */
   #loginScreen{
     min-height:100vh;
     display:flex;
@@ -120,7 +119,6 @@
     display:none;
   }
 
-  /* ---- App shell ---- */
   #appScreen{ display:none; }
   .topbar{
     display:flex;
@@ -280,6 +278,8 @@
   .badge.dicabut{ background:rgba(240,85,90,0.12); color:var(--danger); }
   .badge.dicabut::before{ background:var(--danger); }
 
+  .action-cell{ display:flex; gap:6px; }
+
   .action-btn{
     font-size:12px;
     font-weight:600;
@@ -295,6 +295,11 @@
   .action-btn.revoke:hover{ background:var(--danger); color:#fff; border-color:var(--danger); }
   .action-btn.restore{ color:var(--accent); }
   .action-btn.restore:hover{ background:var(--accent); color:#052321; border-color:var(--accent); }
+  .action-btn.delete{
+    color:var(--text-faint);
+    padding:6px 9px;
+  }
+  .action-btn.delete:hover{ background:var(--danger-dim); color:#fff; border-color:var(--danger); }
   .action-btn:disabled{ opacity:.4; cursor:default; }
 
   .empty-state{
@@ -326,6 +331,45 @@
 
   .loading-row td{ text-align:center; padding:40px; color:var(--text-faint); font-family:'IBM Plex Mono',monospace; font-size:12px; }
 
+  .modal-overlay{
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(6,10,20,0.6);
+    backdrop-filter:blur(2px);
+    align-items:center;
+    justify-content:center;
+    z-index:200;
+    padding:20px;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:26px;
+    max-width:380px;
+    width:100%;
+  }
+  .modal-card h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:16px;
+    margin:0 0 10px;
+    color:var(--text);
+  }
+  .modal-card p{
+    font-size:13px;
+    color:var(--text-dim);
+    line-height:1.5;
+    margin:0 0 20px;
+  }
+  .modal-card .mono{ color:var(--text); }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
+  .modal-actions .btn{ width:auto; margin-top:0; padding:9px 16px; font-size:13px; }
+  .btn-cancel{ background:transparent; border:1px solid var(--border); color:var(--text-dim); }
+  .btn-cancel:hover{ color:var(--text); border-color:var(--text-dim); }
+  .btn-danger{ background:var(--danger); color:#fff; }
+  .btn-danger:hover{ background:#ff6b70; }
+
   @media (max-width:720px){
     .stats-row{ grid-template-columns:repeat(2,1fr); }
     .container{ padding:18px 14px; }
@@ -338,7 +382,6 @@
 </head>
 <body>
 
-  <!-- ============== LOGIN ============== -->
   <div id="loginScreen">
     <div class="login-card">
       <div class="brand-mark">Bursa Lens</div>
@@ -356,7 +399,6 @@
     </div>
   </div>
 
-  <!-- ============== APP ============== -->
   <div id="appScreen">
     <div class="topbar">
       <div class="topbar-left">
@@ -420,14 +462,25 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal-card">
+      <h2>Hapus data lisensi ini?</h2>
+      <p>
+        Machine ID <span class="mono" id="deleteTargetId"></span> akan
+        <strong>dihapus permanen</strong> dari database. Ini beda dengan "Cabut" —
+        kalau komputer itu buka aplikasi lagi, dia akan tercatat sebagai
+        aktivasi baru. Tindakan ini tidak bisa dibatalkan.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-cancel" id="btnCancelDelete">Batal</button>
+        <button class="btn btn-danger" id="btnConfirmDelete">Ya, Hapus</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
 <script>
-  // ======================================================================
-  // KONFIGURASI — isi dengan Project URL & anon public key dari Supabase-mu
-  // (Settings → API di dashboard Supabase). Keduanya AMAN dipakai di sisi
-  // client, karena akses sesungguhnya dibatasi oleh RLS policy di database.
-  // ======================================================================
   const SUPABASE_URL = "https://baqnoujyyxcvnllijpkd.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhcW5vdWp5eXhjdm5sbGlqcGtkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMDY4NTksImV4cCI6MjEwMjY4Mjg1OX0.BgX-qnTUY9oB_M7wytZuL99_srqJ3XgdsxOlB4Bi4Lk";
 
@@ -439,8 +492,11 @@
   const userEmailEl = document.getElementById('userEmail');
   const tableBody = document.getElementById('tableBody');
   const toastEl = document.getElementById('toast');
+  const deleteModal = document.getElementById('deleteModal');
+  const deleteTargetIdEl = document.getElementById('deleteTargetId');
 
   let allLicenses = [];
+  let pendingDeleteId = null;
 
   function showToast(msg, isErr=false){
     toastEl.textContent = msg;
@@ -470,7 +526,6 @@
     }
   }
 
-  // ---------------- AUTH ----------------
   document.getElementById('btnLogin').addEventListener('click', doLogin);
   document.getElementById('loginPassword').addEventListener('keydown', e=>{
     if(e.key === 'Enter') doLogin();
@@ -509,7 +564,6 @@
     loadLicenses();
   }
 
-  // Cek sesi yang sudah tersimpan (biar tidak perlu login ulang tiap buka)
   (async ()=>{
     const { data: { session } } = await sb.auth.getSession();
     if(session && session.user){
@@ -517,7 +571,6 @@
     }
   })();
 
-  // ---------------- DATA ----------------
   document.getElementById('btnRefresh').addEventListener('click', loadLicenses);
   document.getElementById('searchInput').addEventListener('input', renderTable);
   document.getElementById('filterStatus').addEventListener('change', renderTable);
@@ -572,7 +625,7 @@
       const statusBadge = l.revoked
         ? `<span class="badge dicabut">Dicabut</span>`
         : `<span class="badge aktif">Aktif</span>`;
-      const actionBtn = l.revoked
+      const toggleBtn = l.revoked
         ? `<button class="action-btn restore" data-id="${l.machine_id}" data-action="restore">Aktifkan</button>`
         : `<button class="action-btn revoke" data-id="${l.machine_id}" data-action="revoke">Cabut</button>`;
       return `
@@ -588,12 +641,20 @@
           <td class="faint">${fmtDate(l.first_activated_at)}</td>
           <td class="faint">${fmtDate(l.last_seen_at)}</td>
           <td>${statusBadge}</td>
-          <td>${actionBtn}</td>
+          <td>
+            <div class="action-cell">
+              ${toggleBtn}
+              <button class="action-btn delete" data-id="${l.machine_id}" title="Hapus permanen">🗑</button>
+            </div>
+          </td>
         </tr>`;
     }).join('');
 
-    document.querySelectorAll('.action-btn').forEach(btn=>{
+    document.querySelectorAll('.action-btn.revoke, .action-btn.restore').forEach(btn=>{
       btn.addEventListener('click', onToggleRevoke);
+    });
+    document.querySelectorAll('.action-btn.delete').forEach(btn=>{
+      btn.addEventListener('click', onOpenDeleteModal);
     });
   }
 
@@ -624,6 +685,46 @@
     showToast(revoke ? 'Lisensi dicabut.' : 'Lisensi diaktifkan kembali.');
     await loadLicenses();
   }
+
+  function onOpenDeleteModal(e){
+    pendingDeleteId = e.currentTarget.dataset.id;
+    deleteTargetIdEl.textContent = truncateMid(pendingDeleteId, 10, 8);
+    deleteModal.classList.add('show');
+  }
+
+  function closeDeleteModal(){
+    deleteModal.classList.remove('show');
+    pendingDeleteId = null;
+  }
+
+  document.getElementById('btnCancelDelete').addEventListener('click', closeDeleteModal);
+  deleteModal.addEventListener('click', (e)=>{
+    if(e.target === deleteModal) closeDeleteModal();
+  });
+
+  document.getElementById('btnConfirmDelete').addEventListener('click', async ()=>{
+    if(!pendingDeleteId) return;
+    const btn = document.getElementById('btnConfirmDelete');
+    btn.disabled = true;
+    btn.textContent = 'Menghapus…';
+
+    const { error } = await sb
+      .from('licenses')
+      .delete()
+      .eq('machine_id', pendingDeleteId);
+
+    btn.disabled = false;
+    btn.textContent = 'Ya, Hapus';
+
+    if(error){
+      showToast('Gagal menghapus: ' + error.message, true);
+      return;
+    }
+
+    showToast('Data lisensi dihapus.');
+    closeDeleteModal();
+    await loadLicenses();
+  });
 </script>
 </body>
 </html>
